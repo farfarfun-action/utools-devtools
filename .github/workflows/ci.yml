@@ -39,6 +39,7 @@ jobs:
           import { writeFileSync } from 'node:fs';
           writeFileSync('.cache/fixture/plugin.json', JSON.stringify({pluginName:'CI fixture',version:'1.0.0',main:'index.html',features:[{code:'ci',cmds:['fixture']}]}));
           writeFileSync('.cache/fixture/index.html', '<h1>CI fixture</h1>');
+          writeFileSync('identity.json', JSON.stringify({os:{},app:{name:'uTools',version:'8.0.2'},developer:{},pluginId:process.env.RUNNER_OS === 'Linux' ? '' : 'cifixture'}));
           JS
       - name: Exercise reusable Action
         id: package
@@ -46,7 +47,10 @@ jobs:
         with:
           source: .cache/fixture
           output: .cache/action-fixture.upxs
-          identity-json: '{"os":{"mid":"ci-fixture"},"app":{"name":"uTools","version":"8.0.2"},"developer":{"uid":"ci-fixture-not-a-real-account"},"pluginId":"cifixture"}'
+          identity-json: ${{ runner.os == 'Linux' && '{"os":{"mid":"ci-fixture"},"app":{"name":"uTools","version":"8.0.2"},"developer":{"uid":"ci-fixture-not-a-real-account"},"pluginId":"cifixture"}' || '' }}
+          mid: ci-fixture-mid
+          uid: ci-fixture-not-a-real-account
+          cellphone: ci-fixture-phone
       - name: Check Action outputs
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.package-file }}

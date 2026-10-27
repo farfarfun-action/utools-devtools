@@ -162,8 +162,9 @@ export function summary(result) {
     integrityVerified: result.warnings.length === 0, warnings: result.warnings, clientInstallVerified: false };
 }
 
-export async function pack(source, output, identity, profile) {
+export async function pack(source, output, identity, profile, identityFile) {
   source = resolve(source); output = resolve(output);
+  const privateIdentity = identityFile && resolve(identityFile);
   const rel = relative(source, output);
   requireValue(rel.startsWith('..' + (process.platform === 'win32' ? '\\' : '/')) || isAbsolute(rel), 'Output must be outside source directory');
   identity = identityFrom(identity);
@@ -180,6 +181,7 @@ export async function pack(source, output, identity, profile) {
         component(entry.name);
         requireValue(++count <= MAX_FILES, 'Too many source files');
         const src = join(from, entry.name), dst = join(to, entry.name);
+        if (entry.name === 'identity.json' || src === privateIdentity) continue;
         if (entry.isDirectory()) { await mkdir(dst); await copy(src, dst, depth + 1); }
         else {
           requireValue(entry.isFile(), 'Source links and special files are not supported');

@@ -8,8 +8,20 @@ inputs:
     description: Output UPXS path, outside source; must not already exist
     required: true
   identity-json:
-    description: Private identity JSON exported from your own official package; pass an Actions secret
-    required: true
+    description: Optional Actions secret containing identity JSON; takes precedence over identity-file
+    required: false
+  identity-file:
+    description: Project identity file relative to the caller workspace; account fields can come from secrets
+    default: identity.json
+  mid:
+    description: Export device identifier from secrets.UTOOLS_MID
+    required: false
+  uid:
+    description: Developer account ID from secrets.UTOOLS_UID
+    required: false
+  cellphone:
+    description: Developer phone number from secrets.UTOOLS_CELLPHONE
+    required: false
 outputs:
   package-file:
     description: Absolute path of the generated UPXS
@@ -36,12 +48,21 @@ runs:
         PLUGIN_SOURCE: ${{ inputs.source }}
         PLUGIN_OUTPUT: ${{ inputs.output }}
         UTOOLS_IDENTITY_JSON: ${{ inputs.identity-json }}
+        UTOOLS_IDENTITY_PATH: ${{ inputs.identity-file }}
+        UTOOLS_MID: ${{ inputs.mid }}
+        UTOOLS_UID: ${{ inputs.uid }}
+        UTOOLS_CELLPHONE: ${{ inputs.cellphone }}
       run: |
         set -euo pipefail
         task_dir=$(mktemp -d "$RUNNER_TEMP/utools-devtools.XXXXXX")
         trap 'rm -rf "$task_dir"' EXIT
-        export UTOOLS_IDENTITY_FILE="$task_dir/identity.json"
-        node --input-type=module -e 'import {writeFileSync} from "node:fs"; if (!process.env.UTOOLS_IDENTITY_JSON) throw new Error("Missing identity-json secret"); try { JSON.parse(process.env.UTOOLS_IDENTITY_JSON); } catch { throw new Error("Invalid identity JSON"); } writeFileSync(process.env.UTOOLS_IDENTITY_FILE, process.env.UTOOLS_IDENTITY_JSON, {mode: 0o600});'
+        if [ -n "$UTOOLS_IDENTITY_JSON" ]; then
+          export UTOOLS_IDENTITY_FILE="$task_dir/identity.json"
+          node --input-type=module -e 'import {writeFileSync} from "node:fs"; try { JSON.parse(process.env.UTOOLS_IDENTITY_JSON); } catch { throw new Error("Invalid identity JSON"); } writeFileSync(process.env.UTOOLS_IDENTITY_FILE, process.env.UTOOLS_IDENTITY_JSON, {mode: 0o600});'
+        else
+          export UTOOLS_IDENTITY_FILE="$UTOOLS_IDENTITY_PATH"
+          test -f "$UTOOLS_IDENTITY_FILE" || { echo 'Missing project identity.json or identity-json secret' >&2; exit 1; }
+        fi
         unset UTOOLS_IDENTITY_JSON
         node "$TOOL_DIR/src/cli.mjs" prepare-runtime --out "$task_dir/linux-x64.node"
         node "$TOOL_DIR/src/cli.mjs" pack "$PLUGIN_SOURCE" --identity "$UTOOLS_IDENTITY_FILE" --out "$PLUGIN_OUTPUT" --runtime "$task_dir/linux-x64.node" > "$task_dir/result.json"

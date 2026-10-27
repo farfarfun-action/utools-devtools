@@ -34,10 +34,15 @@ function asar(header, body = Buffer.alloc(0)) {
 
 test('pack/unpack preserves files, injects plugin ID only in staging, and redacts identity', async (t) => {
   const { dir, source, output } = await fixture(t);
-  const result = await pack(source, output, identity, profile);
+  await writeFile(join(source, 'identity.json'), JSON.stringify(identity));
+  const privateFile = join(source, 'private-account.json');
+  await writeFile(privateFile, JSON.stringify(identity));
+  const result = await pack(source, output, identity, profile, privateFile);
   assert.equal(result.formatVerified, true);
   assert.equal(result.integrityVerified, true);
   const decoded = open(await readFile(output), profile);
+  assert.equal(decoded.files.has('identity.json'), false);
+  assert.equal(decoded.files.has('private-account.json'), false);
   assert.equal(decoded.manifest.name, identity.pluginId);
   assert.equal(JSON.parse(await readFile(join(source, 'plugin.json'))).name, undefined);
   assert.equal(decoded.files.get('assets/矩阵.txt').bytes.toString(), '矩阵');
@@ -48,9 +53,9 @@ test('pack/unpack preserves files, injects plugin ID only in staging, and redact
   await unpack(decoded, target);
   for (const [name, file] of decoded.files) assert.deepEqual(await readFile(join(target, name)), file.bytes);
   await assert.rejects(unpack(decoded, target), /EEXIST/);
-  await assert.rejects(pack(source, output, identity, profile), /EEXIST/);
+  await assert.rejects(pack(source, output, identity, profile, privateFile), /EEXIST/);
   const second = join(dir, 'second.upxs');
-  await pack(source, second, identity, profile);
+  await pack(source, second, identity, profile, privateFile);
   assert.notDeepEqual(await readFile(output), await readFile(second));
 });
 

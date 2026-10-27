@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { extractFile } from '@electron/asar';
 import { open, seal, summary } from '../src/package.mjs';
@@ -27,8 +29,27 @@ test('official developer 2.7.0 sample: authenticated decode, every ASAR entry, b
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'official.asar');
   await writeFile(file, decoded.archive);
-  for (const [name, entry] of decoded.files) assert.deepEqual(extractFile(file, name), entry.bytes);
+  for (const [name, entry] of decoded.files) assert.deepEqual(extractFile(file, join(...name.split('/'))), entry.bytes);
   const safe = JSON.stringify(summary(decoded));
   for (const value of [decoded.metadata.os.mid, decoded.metadata.developer.cellphone, decoded.metadata.developer.uid, decoded.metadata.key]) assert.equal(safe.includes(value), false);
+  const packageFile = join(dir, 'official.upxs');
+  await writeFile(packageFile, bytes);
+  const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
+  function run(command, args = []) {
+    return spawnSync(process.execPath, [cli, command, packageFile, '--runtime', process.env.UTOOLS_RUNTIME, ...args], { encoding: 'utf8', timeout: 30_000 });
+  }
+  assert.equal(run('inspect').status, 0);
+  const verified = run('verify');
+  assert.equal(verified.status, 1);
+  assert.equal(JSON.parse(verified.stdout).integrityVerified, false);
+  const destination = join(dir, 'unpacked');
+  assert.equal(run('unpack', ['--out', destination]).status, 0);
+  assert.equal((await readFile(join(destination, 'plugin.json'))).equals(decoded.files.get('plugin.json').bytes), true);
+  const identityFile = join(dir, 'identity.json');
+  assert.equal(run('identity', ['--out', identityFile]).status, 0);
+  const identity = JSON.parse(await readFile(identityFile, 'utf8'));
+  assert.equal(identity.developer.uid === decoded.metadata.developer.uid, true);
+  assert.equal(Object.hasOwn(identity, 'key'), false);
+  assert.equal(run('identity', ['--out', identityFile]).status, 1);
   console.log('Official sample passed; no identity or vendor code is included in artifacts.');
 });

@@ -33,7 +33,6 @@ jobs:
           UTOOLS_RUNTIME: .cache/linux-x64.node
         run: npm run test:official
       - name: Prepare Action fixture (synthetic identity, never published)
-        if: runner.os == 'Linux'
         run: |
           mkdir -p .cache/fixture
           node --input-type=module <<'JS'
@@ -42,7 +41,6 @@ jobs:
           writeFileSync('.cache/fixture/index.html', '<h1>CI fixture</h1>');
           JS
       - name: Exercise reusable Action
-        if: runner.os == 'Linux'
         id: package
         uses: ./
         with:
@@ -50,13 +48,10 @@ jobs:
           output: .cache/action-fixture.upxs
           identity-json: '{"os":{"mid":"ci-fixture"},"app":{"name":"uTools","version":"8.0.2"},"developer":{"uid":"ci-fixture-not-a-real-account"},"pluginId":"cifixture"}'
       - name: Check Action outputs
-        if: runner.os == 'Linux'
         env:
           PACKAGE_FILE: ${{ steps.package.outputs.package-file }}
           PACKAGE_SHA256: ${{ steps.package.outputs.sha256 }}
-        run: |
-          test -f "$PACKAGE_FILE"
-          printf '%s  %s\n' "$PACKAGE_SHA256" "$PACKAGE_FILE" | sha256sum -c -
+        run: node --input-type=module -e 'import {readFileSync} from "node:fs"; import {createHash} from "node:crypto"; import assert from "node:assert/strict"; assert.equal(createHash("sha256").update(readFileSync(process.env.PACKAGE_FILE)).digest("hex"), process.env.PACKAGE_SHA256);'
       - name: Package CLI distribution
         if: runner.os == 'Linux'
         run: npm pack --ignore-scripts

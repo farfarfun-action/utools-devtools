@@ -58,7 +58,7 @@ Action 返回 `package-file` 和 `sha256`。固定 tag 用于版本管理，生�
 
 ## 格式与校验范围
 
-详见 [格式分析](docs/format.md)。工具检查元数据认证、插件 ID/时间戳绑定、AES 填充、gzip CRC、ASAR 边界和已有的文件完整性哈希，以及清单资源是否存在。拒绝路径穿越、大小写冲突、Windows 特殊路径、软链接、外置 ASAR 文件和已有输出目录。
+详见 [格式分析](docs/format.md) 与 [升级分析和适配手册](docs/adapting-runtime.md)。后者记录证据链、静态分析命令、已知函数/地址、踩坑记录和升级验证清单。工具检查元数据认证、插件 ID/时间戳绑定、AES 填充、gzip CRC、ASAR 边界和已有的文件完整性哈希，以及清单资源是否存在。拒绝路径穿越、大小写冲突、Windows 特殊路径、软链接、外置 ASAR 文件和已有输出目录。
 
 官方开发工具样本的 `plugin.json` 内容与 ASAR 中保存的哈希不一致。`inspect`、`unpack`、`identity` 允许读取这类包，但明确返回警告和 `integrityVerified: false`；`verify` 对此以非零状态退出。其他文件的哈希不匹配直接拒绝。我们生成的新包重新计算全部哈希，必须通过严格检查。
 

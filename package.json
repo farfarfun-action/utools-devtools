@@ -1,0 +1,19 @@
+{
+  "name": "@farfarfun/utools-devtools",
+  "version": "0.1.0",
+  "description": "uTools UPXS packaging, inspection and safe extraction for CI",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "utools-devtools": "src/cli.mjs" },
+  "exports": "./src/package.mjs",
+  "files": ["src", "README.md", "LICENSE", "docs"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "test": "node --test test/package.test.mjs",
+    "test:official": "node --test test/official.test.mjs"
+  },
+  "repository": { "type": "git", "url": "https://github.com/farfarfun-utools/utools-devtools.git" },
+  "homepage": "https://github.com/farfarfun-utools/utools-devtools#readme",
+  "keywords": ["utools", "upxs", "asar", "cli", "github-actions"],
+  "dependencies": { "@electron/asar": "4.3.1", "@noble/ciphers": "2.4.0" }
+}

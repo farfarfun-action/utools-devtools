@@ -1,0 +1,86 @@
+name: CI and release
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Unit and filesystem regression tests
+        run: npm test
+      - name: Download pinned official runtime for static reading only
+        run: node src/cli.mjs prepare-runtime --out .cache/linux-x64.node
+      - name: Official sample interoperability
+        env:
+          UTOOLS_RUNTIME: .cache/linux-x64.node
+        run: npm run test:official
+      - name: Prepare Action fixture (synthetic identity, never published)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p .cache/fixture
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('.cache/fixture/plugin.json', JSON.stringify({pluginName:'CI fixture',version:'1.0.0',main:'index.html',features:[{code:'ci',cmds:['fixture']}]}));
+          writeFileSync('.cache/fixture/index.html', '<h1>CI fixture</h1>');
+          JS
+      - name: Exercise reusable Action
+        if: runner.os == 'Linux'
+        id: package
+        uses: ./
+        with:
+          source: .cache/fixture
+          output: .cache/action-fixture.upxs
+          identity-json: '{"os":{"mid":"ci-fixture"},"app":{"name":"uTools","version":"8.0.2"},"developer":{"uid":"ci-fixture-not-a-real-account"},"pluginId":"cifixture"}'
+      - name: Check Action outputs
+        if: runner.os == 'Linux'
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package-file }}
+          PACKAGE_SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          test -f "$PACKAGE_FILE"
+          printf '%s  %s\n' "$PACKAGE_SHA256" "$PACKAGE_FILE" | sha256sum -c -
+      - name: Package CLI distribution
+        if: runner.os == 'Linux'
+        run: npm pack --ignore-scripts
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: utools-devtools-cli
+          path: '*.tgz'
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - uses: actions/download-artifact@v4
+        with:
+          name: utools-devtools-cli
+      - run: sha256sum *.tgz > SHA256SUMS
+      - name: Publish tested CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" *.tgz SHA256SUMS --verify-tag --prerelease --title "$GITHUB_REF_NAME · UPXS 开发工具预览" --notes-file docs/release.md

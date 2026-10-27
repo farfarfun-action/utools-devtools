@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { extractFile } from '@electron/asar';
+import { open, seal, summary } from '../src/package.mjs';
+import { loadProfile, sha256 } from '../src/runtime.mjs';
+
+test('official developer 2.7.0 sample: authenticated decode, every ASAR entry, byte-exact reseal', async (t) => {
+  const url = 'https://res.u-tools.cn/plugins/9t97fzw4ihpnvmhmnhonuev3hpxoqji4.upxs';
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  assert.equal(response.ok, true);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  assert.equal(sha256(bytes), '04cde14fb4b1b0fe40f4067d52b47b61906394e612fe5d1b23924a400a651a17');
+  const profile = await loadProfile(process.env.UTOOLS_RUNTIME);
+  const decoded = open(bytes, profile);
+  assert.equal(decoded.manifest.name, 'developer');
+  assert.equal(decoded.manifest.version, '2.7.0');
+  assert.equal(decoded.archive.length, 1399813);
+  assert.equal(decoded.files.size, 44);
+  assert.deepEqual(seal(decoded.metadata, decoded.compressed, profile), bytes);
+  const dir = await mkdtemp(join(tmpdir(), 'utools-official-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'official.asar');
+  await writeFile(file, decoded.archive);
+  for (const [name, entry] of decoded.files) assert.deepEqual(extractFile(file, name), entry.bytes);
+  const safe = JSON.stringify(summary(decoded));
+  for (const value of [decoded.metadata.os.mid, decoded.metadata.developer.cellphone, decoded.metadata.developer.uid, decoded.metadata.key]) assert.equal(safe.includes(value), false);
+  console.log('Official sample passed; no identity or vendor code is included in artifacts.');
+});

@@ -1,0 +1,50 @@
+name: Build uTools UPXS
+description: Package a built plugin directory using its own official export identity
+inputs:
+  source:
+    description: Built plugin directory containing plugin.json
+    required: true
+  output:
+    description: Output UPXS path, outside source; must not already exist
+    required: true
+  identity-json:
+    description: Private identity JSON exported from your own official package; pass an Actions secret
+    required: true
+outputs:
+  package-file:
+    description: Absolute path of the generated UPXS
+    value: ${{ steps.pack.outputs.package-file }}
+  sha256:
+    description: SHA-256 checksum of the generated package
+    value: ${{ steps.pack.outputs.sha256 }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - name: Install packaging dependencies
+      shell: bash
+      env:
+        TOOL_DIR: ${{ github.action_path }}
+      run: npm ci --prefix "$TOOL_DIR" --ignore-scripts --no-audit --no-fund
+    - name: Package and verify UPXS
+      id: pack
+      shell: bash
+      env:
+        TOOL_DIR: ${{ github.action_path }}
+        PLUGIN_SOURCE: ${{ inputs.source }}
+        PLUGIN_OUTPUT: ${{ inputs.output }}
+        UTOOLS_IDENTITY_JSON: ${{ inputs.identity-json }}
+      run: |
+        set -euo pipefail
+        task_dir=$(mktemp -d "$RUNNER_TEMP/utools-devtools.XXXXXX")
+        trap 'rm -rf "$task_dir"' EXIT
+        export UTOOLS_IDENTITY_FILE="$task_dir/identity.json"
+        node --input-type=module -e 'import {writeFileSync} from "node:fs"; if (!process.env.UTOOLS_IDENTITY_JSON) throw new Error("Missing identity-json secret"); try { JSON.parse(process.env.UTOOLS_IDENTITY_JSON); } catch { throw new Error("Invalid identity JSON"); } writeFileSync(process.env.UTOOLS_IDENTITY_FILE, process.env.UTOOLS_IDENTITY_JSON, {mode: 0o600});'
+        unset UTOOLS_IDENTITY_JSON
+        node "$TOOL_DIR/src/cli.mjs" prepare-runtime --out "$task_dir/linux-x64.node"
+        node "$TOOL_DIR/src/cli.mjs" pack "$PLUGIN_SOURCE" --identity "$UTOOLS_IDENTITY_FILE" --out "$PLUGIN_OUTPUT" --runtime "$task_dir/linux-x64.node" > "$task_dir/result.json"
+        node "$TOOL_DIR/src/cli.mjs" verify "$PLUGIN_OUTPUT" --runtime "$task_dir/linux-x64.node"
+        export UTOOLS_RESULT_FILE="$task_dir/result.json"
+        node --input-type=module -e 'import {readFileSync, appendFileSync} from "node:fs"; const r = JSON.parse(readFileSync(process.env.UTOOLS_RESULT_FILE)); if (/[\r\n]/.test(r.output)) throw new Error("Invalid output path"); appendFileSync(process.env.GITHUB_OUTPUT, `package-file=${r.output}\nsha256=${r.packageSha256}\n`);'

@@ -36,6 +36,7 @@ test('pack/unpack preserves files, injects plugin ID only in staging, and redact
   const { dir, source, output } = await fixture(t);
   const result = await pack(source, output, identity, profile);
   assert.equal(result.formatVerified, true);
+  assert.equal(result.integrityVerified, true);
   const decoded = open(await readFile(output), profile);
   assert.equal(decoded.manifest.name, identity.pluginId);
   assert.equal(JSON.parse(await readFile(join(source, 'plugin.json'))).name, undefined);
@@ -118,4 +119,21 @@ test('ASAR integrity detects changed bytes', async (t) => {
   const { archive } = open(await readFile(output), profile);
   const modified = Buffer.from(archive); modified[modified.length - 1] ^= 1;
   assert.throws(() => inspectArchive(modified), /integrity/);
+});
+
+test('stale manifest hash is reported on read, but strict archive validation rejects it', async (t) => {
+  const { source, output } = await fixture(t);
+  await pack(source, output, identity, profile);
+  const { archive, metadata } = open(await readFile(output), profile);
+  const modified = Buffer.from(archive);
+  const header = JSON.parse(modified.toString('utf8', 16, 16 + modified.readUInt32LE(12)));
+  const start = 8 + modified.readUInt32LE(4) + Number(header.files['plugin.json'].offset);
+  const versionOffset = modified.indexOf('1.0.0', start);
+  assert.ok(versionOffset >= start);
+  modified[versionOffset] = '2'.charCodeAt(0);
+  assert.throws(() => inspectArchive(modified), /integrity/);
+  const decoded = open(seal(metadata, gzipSync(modified), profile), profile);
+  assert.equal(decoded.manifest.version, '2.0.0');
+  assert.equal(summary(decoded).integrityVerified, false);
+  assert.equal(decoded.warnings.length, 1);
 });

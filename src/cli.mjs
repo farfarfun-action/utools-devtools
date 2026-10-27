@@ -40,7 +40,10 @@ try {
           await writeFile(values.out, JSON.stringify(identityFrom(decoded.metadata), null, 2) + '\n', { flag: 'wx', mode: 0o600 });
           result = { output: values.out, private: true, message: 'Store this identity in a secret, never in source control' };
         } else if (command === 'unpack') result = await unpack(decoded, values.out);
-        else result = summary(decoded);
+        else {
+          result = summary(decoded);
+          if (command === 'verify' && !result.integrityVerified) process.exitCode = 1;
+        }
       }
     }
     console.log(JSON.stringify(result, null, 2));

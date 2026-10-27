@@ -19,6 +19,9 @@ test('official developer 2.7.0 sample: authenticated decode, every ASAR entry, b
   assert.equal(decoded.manifest.version, '2.7.0');
   assert.equal(decoded.archive.length, 1399813);
   assert.equal(decoded.files.size, 44);
+  assert.equal(decoded.warnings.length, 1);
+  assert.equal(summary(decoded).integrityVerified, false);
+  assert.match(decoded.warnings[0], /plugin.json/);
   assert.deepEqual(seal(decoded.metadata, decoded.compressed, profile), bytes);
   const dir = await mkdtemp(join(tmpdir(), 'utools-official-'));
   t.after(() => rm(dir, { recursive: true, force: true }));

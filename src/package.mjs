@@ -74,12 +74,13 @@ export function open(bytes, profile) {
     compressed = Buffer.concat([cipher.update(bytes.subarray(4 + length)), cipher.final()]);
     archive = gunzipSync(compressed, { maxOutputLength: MAX_ARCHIVE });
   } catch { throw new Error('Invalid UPXS payload or decompression limit exceeded'); }
-  const files = inspectArchive(archive);
+  const warnings = [];
+  const files = inspectArchive(archive, warnings);
   const manifest = validateManifest(files, metadata.pluginId);
-  return { metadata, compressed, archive, files, manifest };
+  return { metadata, compressed, archive, files, manifest, warnings };
 }
 
-export function inspectArchive(archive) {
+export function inspectArchive(archive, warnings) {
   requireValue(archive.length >= 16 && archive.length <= MAX_ARCHIVE && archive.readUInt32LE(0) === 4, 'Invalid ASAR header');
   const size = archive.readUInt32LE(4);
   const jsonSize = archive.readUInt32LE(12);
@@ -111,14 +112,18 @@ export function inspectArchive(archive) {
       const bytes = archive.subarray(start, end);
       if (entry.integrity) {
         const integrity = entry.integrity;
-        requireValue(integrity.algorithm === 'SHA256' && integrity.hash === sha256(bytes)
+        requireValue(integrity.algorithm === 'SHA256'
           && Number.isSafeInteger(integrity.blockSize) && integrity.blockSize > 0
           && Array.isArray(integrity.blocks), 'ASAR integrity check failed');
         const hashes = [];
         for (let i = 0; i < bytes.length; i += integrity.blockSize) hashes.push(sha256(bytes.subarray(i, i + integrity.blockSize)));
         // Electron also writes one empty block for empty files.
         if (!bytes.length && integrity.blocks.length === 1) hashes.push(sha256(bytes));
-        requireValue(JSON.stringify(hashes) === JSON.stringify(integrity.blocks), 'ASAR block integrity check failed');
+        const valid = integrity.hash === sha256(bytes) && JSON.stringify(hashes) === JSON.stringify(integrity.blocks);
+        if (!valid && path === 'plugin.json' && warnings) {
+          // Official exports can replace plugin.json without refreshing its stored ASAR hash.
+          warnings.push('plugin.json ASAR integrity mismatch; also observed in the pinned official developer export');
+        } else requireValue(valid, 'ASAR integrity check failed');
       }
       if (entry.size) ranges.push([start, end]);
       files.set(path, { bytes, executable: entry.executable === true });
@@ -151,7 +156,8 @@ function validateManifest(files, pluginId) {
 export function summary(result) {
   return { pluginId: result.metadata.pluginId, pluginName: result.manifest.pluginName,
     version: result.manifest.version, files: result.files.size, archiveBytes: result.archive.length,
-    archiveSha256: sha256(result.archive), formatVerified: true, clientInstallVerified: false };
+    archiveSha256: sha256(result.archive), formatVerified: true,
+    integrityVerified: result.warnings.length === 0, warnings: result.warnings, clientInstallVerified: false };
 }
 
 export async function pack(source, output, identity, profile) {

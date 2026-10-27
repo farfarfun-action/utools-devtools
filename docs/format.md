@@ -27,7 +27,7 @@ remaining bytes: AES-256-CBC(gzip(ASAR))，PKCS#7 填充
 ## 回归与边界
 
 1. 官方样本通过认证解密；额外绑定与 `pluginId + timestamp` 一致。
-2. 读取每个 ASAR 文件，与 `@electron/asar` 独立读取结果比较。
+2. 读取每个 ASAR 文件，与 `@electron/asar` 独立读取结果比较。官方样本的 `plugin.json` 保存了过期哈希（实际 `dbf2057ef1a62e8128032f7b9eca2ac49ddcbd88e1667b0fac39f6f67684af66`，记录为 `7f63c5f62f16f0150d6ea1d6cbdb0b5a859890ffd3e55e3bfe1b8fbb376c6168`）。读取时报告警告，严格 `verify` 会失败；其他文件的哈希均正常。
 3. 使用原始元数据和压缩正文重新封装，与官方文件逐字节相等。
 4. 自己生成的测试插件完成打包/解包往返；测试篡改、截断、资源缺失、身份错配、路径穿越、软链接、重名、覆盖和 ASAR 完整性损坏。
 5. Linux、Windows、macOS 均运行这些检查；Action 另做调用与输出校验。

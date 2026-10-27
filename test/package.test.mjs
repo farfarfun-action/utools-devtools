@@ -20,6 +20,7 @@ async function fixture(t) {
   for (const [name, content] of Object.entries({ 'plugin.json': JSON.stringify(manifest), 'index.html': '<h1>测试</h1>', 'preload.js': 'globalThis.fixture = true', 'logo.svg': '<svg/>', 'empty.txt': '' })) await writeFile(join(source, name), content);
   await mkdir(join(source, 'assets'));
   await writeFile(join(source, 'assets', '矩阵.txt'), '矩阵');
+  await writeFile(join(source, 'assets', '重复.txt'), '矩阵');
   const output = join(dir, 'test.upxs');
   return { dir, source, output };
 }
@@ -46,6 +47,7 @@ test('pack/unpack preserves files, injects plugin ID only in staging, and redact
   assert.equal(decoded.manifest.name, identity.pluginId);
   assert.equal(JSON.parse(await readFile(join(source, 'plugin.json'))).name, undefined);
   assert.equal(decoded.files.get('assets/矩阵.txt').bytes.toString(), '矩阵');
+  assert.deepEqual(decoded.files.get('assets/重复.txt').bytes, decoded.files.get('assets/矩阵.txt').bytes);
   assert.equal(JSON.stringify(summary(decoded)).includes('PRIVATE_FIXTURE'), false);
   assert.deepEqual(identityFrom(decoded.metadata), identity);
   assert.equal(summary(decoded).clientInstallVerified, false);
@@ -102,7 +104,8 @@ test('reject traversal, links, external files, Windows paths, duplicate names an
     assert.throws(() => inspectArchive(asar({ files: { x: entry } }, Buffer.from('x'))));
   }
   assert.throws(() => inspectArchive(asar({ files: { A: file, a: file } }, Buffer.from('x'))), /Duplicate/);
-  assert.throws(() => inspectArchive(asar({ files: { x: file, y: file } }, Buffer.from('x'))), /Overlapping/);
+  assert.equal(inspectArchive(asar({ files: { x: file, y: file } }, Buffer.from('x'))).size, 2);
+  assert.throws(() => inspectArchive(asar({ files: { x: { offset: '0', size: 2 }, y: { offset: '1', size: 1 } } }, Buffer.from('xy'))), /Overlapping/);
   assert.throws(() => inspectArchive(asar({ files: {} }, Buffer.from('trailing'))), /trailing/);
   assert.throws(() => profileFromRuntime(Buffer.from('not the official addon')), /Unsupported runtime/);
 });

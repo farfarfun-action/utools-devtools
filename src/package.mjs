@@ -133,8 +133,13 @@ export function inspectArchive(archive, warnings) {
   }
   walk(header);
   ranges.sort((a, b) => a[0] - b[0]);
-  let end = 8 + size;
-  for (const range of ranges) { requireValue(range[0] === end, 'Overlapping or gapped ASAR files'); end = range[1]; }
+  let end = 8 + size, previousStart = -1;
+  for (const range of ranges) {
+    // ASAR deduplicates identical files by sharing their complete byte range.
+    if (range[0] === previousStart && range[1] === end) continue;
+    requireValue(range[0] === end, 'Overlapping or gapped ASAR files');
+    previousStart = range[0]; end = range[1];
+  }
   requireValue(end === archive.length, 'Unexpected trailing ASAR data');
   return files;
 }

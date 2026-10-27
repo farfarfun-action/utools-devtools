@@ -11,7 +11,7 @@
 需要 Node.js 22.12+，以及能解压 xz 的 `tar`（三平台 Actions 环境均有）。安装 GitHub Release 的 `.tgz`，或安装固定 Git tag：
 
 ```sh
-npm install --global github:farfarfun-action/utools-devtools#v0.1.3
+npm install --global github:farfarfun-action/utools-devtools#v0.1.4
 utools-devtools prepare-runtime --out .cache/linux-x64.node
 utools-devtools inspect plugin.upxs --runtime .cache/linux-x64.node
 utools-devtools verify plugin.upxs --runtime .cache/linux-x64.node
@@ -67,7 +67,7 @@ steps:
   # 先用自己的步骤构建 ./utools，含 plugin.json 和 dist 等资源
   - name: Package UPXS
     id: upxs
-    uses: farfarfun-action/utools-devtools@v0.1.3
+    uses: farfarfun-action/utools-devtools@v0.1.4
     with:
       source: utools
       output: release/my-plugin.upxs

@@ -121,6 +121,12 @@ test('ASAR integrity detects changed bytes', async (t) => {
   assert.throws(() => inspectArchive(modified), /integrity/);
 });
 
+test('reject infeasible ASAR block counts before allocating per-byte hashes', { timeout: 1000 }, () => {
+  const body = Buffer.alloc(4 * 1024 * 1024);
+  const file = { offset: '0', size: body.length, integrity: { algorithm: 'SHA256', hash: '00'.repeat(32), blockSize: 1, blocks: [] } };
+  assert.throws(() => inspectArchive(asar({ files: { payload: file } }, body)), /block count/);
+});
+
 test('stale manifest hash is reported on read, but strict archive validation rejects it', async (t) => {
   const { source, output } = await fixture(t);
   await pack(source, output, identity, profile);

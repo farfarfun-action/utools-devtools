@@ -115,6 +115,8 @@ export function inspectArchive(archive, warnings) {
         requireValue(integrity.algorithm === 'SHA256'
           && Number.isSafeInteger(integrity.blockSize) && integrity.blockSize > 0
           && Array.isArray(integrity.blocks), 'ASAR integrity check failed');
+        const expectedBlocks = Math.ceil(bytes.length / integrity.blockSize);
+        requireValue(integrity.blocks.length === expectedBlocks || (!bytes.length && integrity.blocks.length === 1), 'Invalid ASAR integrity block count');
         const hashes = [];
         for (let i = 0; i < bytes.length; i += integrity.blockSize) hashes.push(sha256(bytes.subarray(i, i + integrity.blockSize)));
         // Electron also writes one empty block for empty files.
